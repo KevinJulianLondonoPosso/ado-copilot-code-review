@@ -3,14 +3,14 @@
 [![Azure DevOps Marketplace](https://img.shields.io/badge/Azure%20DevOps-Marketplace-blue)](https://marketplace.visualstudio.com/items?itemName=LittleFortSoftware.ado-copilot-code-review)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-Automated pull request code reviews powered by the official GitHub Copilot CLI or Claude Code CLI. Get automated feedback on your PRs while leaving your code hosted in Azure DevOps repos.
+Automated pull request code reviews powered by the official GitHub Copilot CLI. Get automated feedback on your PRs while leaving your code hosted in Azure DevOps repos.
 
 ## Overview
 
-This Azure DevOps extension provides a pipeline task that automatically reviews pull request code changes using GitHub Copilot or Claude Code. When triggered, the task:
+This Azure DevOps extension provides a pipeline task that automatically reviews pull request code changes using GitHub Copilot. When triggered, the task:
 
 1. Fetches pull request details, changed files, and linked work item details from Azure DevOps
-2. Invokes the configured CLI agent (GitHub Copilot or Claude Code) to analyze the changes
+2. Invokes the GitHub Copilot CLI to analyze the changes
 3. Posts review comments directly to the pull request
 
 This brings AI-powered code review capabilities to Azure DevOps, helping teams improve code quality through AI-assisted reviews.
@@ -21,9 +21,7 @@ This brings AI-powered code review capabilities to Azure DevOps, helping teams i
 
 This extension supports Windows and Linux Azure DevOps agents. Compatible with MS-hosted and self-hosted agents. Before using, ensure you have:
 
-- **AI Agent** (one of the following):
-  - **GitHub Copilot** (default): An active GitHub Copilot subscription and a GitHub PAT with Copilot access permissions
-  - **Claude Code**: An Anthropic API key with access to Claude Code
+- **AI Agent**: An active GitHub Copilot subscription and a GitHub PAT with Copilot access permissions
 - **Azure DevOps Authentication** (one of the following):
   - **System Access Token (Recommended)**: Use the pipeline's built-in OAuth token for Azure DevOps Services. Must grant permissions to Build Service Identity (see below).
   - **Personal Access Token**: Required for Azure DevOps Server (on-prem) or if you prefer explicit token management. Needs permissions to read pull requests, write comments, and read code.
@@ -81,33 +79,6 @@ steps:
     azureDevOpsPat: '$(AZURE_DEVOPS_PAT)'
 ```
 
-#### Using Claude Code CLI
-
-To use Claude Code instead of GitHub Copilot, enable `useClaudeCode` and provide an Anthropic API key:
-
-```yaml
-trigger: none
-
-pool:
-  vmImage: 'ubuntu-latest'  # or 'windows-latest'
-
-steps:
-- checkout: self
-  fetchDepth: 0
-
-- task: CopilotCodeReview@1
-  displayName: 'Claude Code Review'
-  inputs:
-    useClaudeCode: true
-    anthropicApiKey: '$(ANTHROPIC_API_KEY)'
-    useSystemAccessToken: true
-    model: 'claude-sonnet-4-6'
-    maxTurns: '50'
-    maxBudget: '5.00'
-```
-
-> **NOTE**: Claude Code CLI is installed automatically via `npm install -g @anthropic-ai/claude-code`. Node.js is available on all Azure DevOps agents. Output is streamed to the pipeline logs in real time.
-
 #### Set Trigger
 
 Use branch policies on your protected branches to specify the pipeline as a build validation that must finish before the PR can be completed:
@@ -132,7 +103,7 @@ You can customize the review prompt to focus on aspects tailored to your needs:
       Avoid lengthy explanations, keep comments concise and direct.
 ```
 
-For longer custom prompts, create a .txt file in your repository and pass the file path as a task input:
+For longer custom prompts, create a .txt file in your repository and pass the file path as the `prompt` input:
 
 ```yaml
 - task: CopilotCodeReview@1
@@ -140,7 +111,7 @@ For longer custom prompts, create a .txt file in your repository and pass the fi
   inputs:
     githubPat: '$(GITHUB_PAT)'
     useSystemAccessToken: true
-    promptFile: '$(Build.SourcesDirectory)/.copilot/review-prompt.txt'
+    prompt: '$(Build.SourcesDirectory)/.copilot/review-prompt.txt'
 ```
 
 > **IMPORTANT:** If using a custom prompt, avoid including any double quotation marks (") as this will cause errors when passing the input to the Copilot CLI. Single quotes (') can be used instead and should not cause any issues.
@@ -177,11 +148,7 @@ steps:
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `githubPat` | Conditional | - | GitHub Personal Access Token with Copilot access. Required when using GitHub Copilot CLI (default). |
-| `useClaudeCode` | No | `false` | Use Claude Code CLI (Anthropic) instead of GitHub Copilot CLI |
-| `anthropicApiKey` | Conditional | - | Anthropic API key. Required when `useClaudeCode` is `true`. |
-| `maxTurns` | No | - | Maximum agentic turns for Claude Code CLI |
-| `maxBudget` | No | - | Maximum cost in USD for a Claude Code session |
+| `githubPat` | Yes | - | GitHub Personal Access Token with Copilot access. |
 | `useSystemAccessToken` | No | `false` | Use pipeline's System.AccessToken instead of a PAT (recommended for Azure DevOps Services) |
 | `azureDevOpsPat` | Conditional | - | Azure DevOps PAT for API access. Required if `useSystemAccessToken` is `false`. |
 | `organization` | No | `$(System.CollectionUri)` (inferred) | Azure DevOps organization name for cloud-hosted teams |
@@ -191,10 +158,8 @@ steps:
 | `pullRequestId` | No | `$(System.PullRequest.PullRequestId)` | PR ID (auto-detected in PR builds) |
 | `timeout` | No | `15` | Timeout in minutes |
 | `model` | No | - | Preferred model to use (see valid options below) |
-| `promptFile` | No | - | Path to custom prompt file |
-| `prompt` | No | - | Inline custom prompt (overrides `promptFile`) |
-| `promptFileRaw` | No | - | _(Advanced)_ Path to custom prompt file that will be passed as-is with no supportive direction. |
-| `promptRaw` | No | - | _(Advanced)_ Inline custom prompt that will be passed as-is with no supportive direction. |
+| `prompt` | No | - | Inline custom prompt or path to a prompt file. Auto-detected: if the value points to an existing file, the file is read; otherwise treated as inline text. Merged with the default review template unless `promptRaw` is enabled. |
+| `promptRaw` | No | `false` | When `true`, the `prompt` value is passed directly to the Copilot CLI without merging with the default review template. |
 | `authors` | No | - | Comma-separated list of email addresses to filter reviews (see below) |
 | `includeWorkItems` | No | `true` | Fetch and include linked work item details as review context |
 
@@ -216,22 +181,6 @@ As of April 2026, here are the model options supported by the GitHub Copilot CLI
 - `gpt-5-mini`
 - `gpt-4.1`
 - `gemini-3-pro-preview`
-
-### Claude Code Models
-
-As of April 2026, here are the model options supported by the Claude Code CLI:
-
-| Alias | Description |
-| --- | ---- |
-| `default` | Recommended model setting, depending on your account type |
-| `sonnet` | Uses the latest Sonnet model (currently Sonnet 4.6) for daily coding tasks |
-| `opus` | Uses the latest Opus model (currently Opus 4.6) for complex reasoning tasks |
-| `haiku` | Uses the fast and efficient Haiku model for simple tasks |
-| `sonnet[1m]` | Uses Sonnet with a 1 million token context window for long sessions |
-| `opus[1m]` | Uses Opus with a 1 million token context window for long sessions |
-| `opusplan` | Special mode that uses `opus` during plan mode, then switches to `sonnet` for execution |
-
-Aliases always point to the latest version. To pin to a specific version, use the full model name (for example, `claude-opus-4-6`).
 
 ### Author Filtering
 
@@ -303,19 +252,12 @@ Create a personal access token:
 
 > **IMPORTANT**: If your user account is part of a GitHub organization, ensure the organization admin goes to **GitHub Policies** > **Copilot** > **Copilot CLI** and sets the policy to **Enabled everywhere**
 
-### Anthropic API Key (for Claude Code CLI)
-
-1. Go to [Anthropic Console](https://console.anthropic.com/)
-2. Create an API key
-3. Store the key as a secret variable in your Azure DevOps pipeline (e.g., `ANTHROPIC_API_KEY`)
-
 ### Storing Tokens in Azure DevOps
 
 1. Navigate to **Pipelines** > **Library**
 2. Create a new Variable Group or edit an existing one
 3. Add the relevant variables:
    - `GITHUB_PAT` (mark as secret) — for Copilot CLI
-   - `ANTHROPIC_API_KEY` (mark as secret) — for Claude Code CLI
    - `AZURE_DEVOPS_PAT` (mark as secret) — if not using System Access Token
 4. Link the variable group to your pipeline
 
@@ -323,7 +265,7 @@ Alternatively, you can create the pipeline first and then configure the pipeline
 
 ## How It Works
 
-1. **Install CLI Agent**: The task ensures the configured CLI agent is installed on the build agent. GitHub Copilot CLI is installed via `winget` (Windows) or the official install script (Linux). Claude Code CLI is installed via `npm install -g @anthropic-ai/claude-code`.
+1. **Install CLI Agent**: The task ensures the GitHub Copilot CLI is installed on the build agent. On Windows it is installed via `winget`; on Linux via the official install script.
 2. **Fetch PR Context**: The task retrieves pull request metadata, existing comments, iteration details, and linked work item details via the Azure DevOps API
 3. **Run Code Review**: Using the PR context and local Git commands, the CLI agent analyzes the changes using the configured or default prompt
 4. **Post Comments**: Review findings are posted as comments on the pull request via the Azure DevOps API
@@ -343,7 +285,6 @@ The default prompt instructs Copilot to focus on:
 ## Limitations
 
 - **GitHub Copilot CLI**: On Windows, requires `winget` to be available. On Linux, requires `curl` and `bash` (standard on most systems). If using MS-hosted agents, these should be available by default.
-- **Claude Code CLI**: Requires `npm` to be available (pre-installed on all Azure DevOps agents). Requires an Anthropic API key.
 - **General Comments Only**: Posts general PR comments (file-level inline comments not yet supported)
 - **Context Window**: Very large PRs may exceed the agent's context limits
 
@@ -353,11 +294,6 @@ The default prompt instructs Copilot to focus on:
 
 - **Windows**: Ensure your agent can access `winget` and has internet connectivity to install the Copilot CLI.
 - **Linux**: Ensure `curl` and `bash` are available, and the agent has internet connectivity to download from `https://gh.io/copilot-install`.
-
-### Task fails with "Claude Code CLI not found"
-
-- Ensure `npm` is available on the agent and the agent has internet connectivity to install `@anthropic-ai/claude-code` from npm.
-- On self-hosted agents, ensure the agent user has permission to install global npm packages.
 
 ### Authentication errors
 
@@ -404,9 +340,9 @@ For issues and feature requests, please use the [GitHub Issues](https://github.c
 ## Acknowledgments
 
 - Built with [Azure Pipelines Task SDK](https://github.com/microsoft/azure-pipelines-task-lib)
-- Powered by [GitHub Copilot](https://github.com/features/copilot) and [Claude Code](https://claude.ai/code)
+- Powered by [GitHub Copilot](https://github.com/features/copilot)
 
 ## Disclaimers
 
-- This project is not affiliated with or endorsed by Azure, GitHub, Anthropic, or the Microsoft Corporation.
-- All responses and interactions generated by GitHub Copilot or Claude Code remain subject to the probabilistic nature of the underlying LLM. As with all LLM-based interactions, there is a non-zero chance of unpredictable results. Use at your own discretion.
+- This project is not affiliated with or endorsed by Azure, GitHub, or the Microsoft Corporation.
+- All responses and interactions generated by GitHub Copilot remain subject to the probabilistic nature of the underlying LLM. As with all LLM-based interactions, there is a non-zero chance of unpredictable results. Use at your own discretion.

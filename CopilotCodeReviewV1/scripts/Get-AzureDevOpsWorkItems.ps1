@@ -67,97 +67,9 @@ param(
     [string]$OutputFile
 )
 
+Import-Module "$PSScriptRoot/AzureDevOpsHelpers.psm1" -Force
+
 #region Helper Functions
-
-function Write-Output-Line {
-    param(
-        [string]$Message = "",
-        [string]$ForegroundColor = "White",
-        [switch]$NoNewline
-    )
-
-    if ($script:OutputToFile) {
-        if ($NoNewline) {
-            $script:OutputBuilder.Append($Message) | Out-Null
-        }
-        else {
-            $script:OutputBuilder.AppendLine($Message) | Out-Null
-        }
-    }
-
-    if ($NoNewline) {
-        Write-Host $Message -ForegroundColor $ForegroundColor -NoNewline
-    }
-    else {
-        Write-Host $Message -ForegroundColor $ForegroundColor
-    }
-}
-
-function Get-AuthorizationHeader {
-    param(
-        [string]$Token,
-        [string]$AuthType = "Basic"
-    )
-
-    if ($AuthType -eq "Bearer") {
-        return @{
-            Authorization  = "Bearer $Token"
-            "Content-Type" = "application/json"
-        }
-    }
-    else {
-        $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$Token"))
-        return @{
-            Authorization  = "Basic $base64Auth"
-            "Content-Type" = "application/json"
-        }
-    }
-}
-
-function Invoke-AzureDevOpsApi {
-    param(
-        [string]$Uri,
-        [hashtable]$Headers,
-        [string]$Method = "Get"
-    )
-
-    try {
-        $response = Invoke-RestMethod -Uri $Uri -Headers $Headers -Method $Method -ErrorAction Stop
-        return $response
-    }
-    catch {
-        $statusCode = $null
-        $errorDetail = $null
-
-        if ($_.Exception.Response) {
-            $statusCode = $_.Exception.Response.StatusCode.value__
-        }
-        if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            $errorDetail = $_.ErrorDetails.Message
-        }
-
-        # Build a descriptive error message with all available context
-        $baseMsg = "Azure DevOps API error"
-        if ($statusCode) {
-            $baseMsg += " (HTTP $statusCode)"
-        }
-        $baseMsg += " calling $Method $Uri"
-
-        if ($statusCode -eq 401) {
-            Write-Error "$baseMsg — Authentication failed. Please verify your token is valid and has work item read permissions. API response: $errorDetail"
-        }
-        elseif ($statusCode -eq 404) {
-            Write-Error "$baseMsg — Work item(s) not found. Please verify the IDs are correct. API response: $errorDetail"
-        }
-        elseif ($statusCode) {
-            Write-Error "$baseMsg — API response: $errorDetail"
-        }
-        else {
-            Write-Error "$baseMsg — $($_.Exception.Message)"
-        }
-        return $null
-    }
-}
 
 function ConvertFrom-Html {
     param(
@@ -192,6 +104,7 @@ function ConvertFrom-Html {
 # Initialize output handling
 $script:OutputToFile = -not [string]::IsNullOrEmpty($OutputFile)
 $script:OutputBuilder = [System.Text.StringBuilder]::new()
+Set-OutputHandling -OutputToFile $script:OutputToFile -Builder $script:OutputBuilder
 
 $headers = Get-AuthorizationHeader -Token $Token -AuthType $AuthType
 $apiVersion = "api-version=7.1"
