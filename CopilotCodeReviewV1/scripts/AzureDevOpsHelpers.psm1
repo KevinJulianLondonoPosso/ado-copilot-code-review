@@ -24,7 +24,7 @@ $script:OutputBuilder = $null
 function Set-OutputHandling {
     <#
     .SYNOPSIS
-        Initialises the module-level output buffer used by Write-Output-Line.
+        Initializes the module-level output buffer used by Write-Output-Line.
     .PARAMETER OutputToFile
         Set to $true when output should also be written to an in-memory buffer.
     .PARAMETER Builder

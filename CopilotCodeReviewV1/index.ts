@@ -487,10 +487,12 @@ async function runCopilotCli(promptFilePath: string, model: string | undefined, 
         }
         
         const printPrompt = `Write-Host ========== START PROMPT ==========; Write-Host $prompt; Write-Host ========== END PROMPT ==========;`;
-        const envRefresh = isWindows()
-            ? `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User");`
+        // On Windows, refresh PATH from the registry so newly installed CLIs are visible.
+        // On non-Windows platforms no refresh is needed; the empty prefix is safe to concatenate.
+        const envRefreshPrefix = isWindows()
+            ? `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User"); `
             : '';
-        const psCommand = `${envRefresh} $prompt = Get-Content -Path '${promptFilePath}' -Raw; ${printPrompt} ${copilotCmd}`;
+        const psCommand = `${envRefreshPrefix}$prompt = Get-Content -Path '${promptFilePath}' -Raw; ${printPrompt} ${copilotCmd}`;
         console.log(`Running Powershell: ${psCommand}`);
         
         const envVars = { ...process.env };

@@ -90,6 +90,10 @@
     If an inline comment fails (e.g., line no longer exists in the diff), the script will
     automatically fall back to posting a generic PR comment with the file path and line
     information appended to the comment text.
+
+    Note: Parameter default values that reference environment variables ($env:*) are
+    evaluated each time the script is invoked (not at module/session load time), so they
+    correctly pick up the current environment state when called.
 #>
 
 [CmdletBinding()]
