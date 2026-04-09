@@ -7,24 +7,29 @@
     It can either create a new comment thread or reply to an existing thread.
     Supports both general PR-level comments and file-specific inline comments.
 
+    Connection parameters (Token, CollectionUri, Project, Repository, Id) default to
+    environment variables set by the pipeline task, so the script can be called with
+    only the -Comment (and optional formatting) parameters when running inside the
+    Copilot review workflow.
+
 .PARAMETER Token
-    Required. Authentication token for Azure DevOps. Can be a PAT or OAuth token.
+    Optional. Authentication token for Azure DevOps. Defaults to AZUREDEVOPS_TOKEN env var.
 
 .PARAMETER AuthType
     Optional. The type of authentication to use. Valid values: 'Basic' (for PAT) or 'Bearer' (for OAuth/System.AccessToken).
-    Default is 'Basic'.
+    Defaults to AZUREDEVOPS_AUTH_TYPE env var, or 'Basic' if not set.
 
 .PARAMETER CollectionUri
-    Required. The Azure DevOps collection URI (e.g., 'https://dev.azure.com/myorg' or 'https://tfs.contoso.com/tfs/DefaultCollection').
+    Optional. The Azure DevOps collection URI. Defaults to AZUREDEVOPS_COLLECTION_URI env var.
 
 .PARAMETER Project
-    Required. The Azure DevOps project name.
+    Optional. The Azure DevOps project name. Defaults to PROJECT env var.
 
 .PARAMETER Repository
-    Required. The repository name where the pull request exists.
+    Optional. The repository name. Defaults to REPOSITORY env var.
 
 .PARAMETER Id
-    Required. The pull request ID to comment on.
+    Optional. The pull request ID to comment on. Defaults to PRID env var.
 
 .PARAMETER Comment
     Required. The comment text to post. Supports markdown formatting.
@@ -49,23 +54,20 @@
     Optional. Ending line number for inline comment. Defaults to StartLine if not provided.
 
 .PARAMETER IterationId
-    Optional. Pull request iteration ID for inline comments. Helps anchor the comment to the correct diff version.
+    Optional. Pull request iteration ID for inline comments. Defaults to ITERATION_ID env var.
+    Helps anchor the comment to the correct diff version.
+
+.EXAMPLE
+    .\Add-AzureDevOpsPRComment.ps1 -Comment "This looks good!" -Status 'Closed'
+    Posts a general comment using connection details from environment variables.
+
+.EXAMPLE
+    .\Add-AzureDevOpsPRComment.ps1 -Comment "Consider async" -Status 'Active' -FilePath '/src/Program.cs' -StartLine 42
+    Creates an inline comment using env var connection details.
 
 .EXAMPLE
     .\Add-AzureDevOpsPRComment.ps1 -Token "your-pat" -CollectionUri "https://dev.azure.com/myorg" -Project "myproject" -Repository "myrepo" -Id 123 -Comment "This looks good!"
-    Creates a new comment thread on pull request #123 using PAT authentication.
-
-.EXAMPLE
-    .\Add-AzureDevOpsPRComment.ps1 -Token "oauth-token" -AuthType "Bearer" -CollectionUri "https://dev.azure.com/myorg" -Project "myproject" -Repository "myrepo" -Id 123 -Comment "This looks good!"
-    Creates a new comment thread using OAuth/System.AccessToken authentication.
-
-.EXAMPLE
-    .\Add-AzureDevOpsPRComment.ps1 -Token "your-pat" -CollectionUri "https://dev.azure.com/myorg" -Project "myproject" -Repository "myrepo" -Id 123 -Comment "I agree" -ThreadId 456
-    Replies to an existing thread #456 on pull request #123.
-
-.EXAMPLE
-    .\Add-AzureDevOpsPRComment.ps1 -Token "your-pat" -CollectionUri "https://dev.azure.com/myorg" -Project "myproject" -Repository "myrepo" -Id 123 -Comment "Consider async" -FilePath "/src/Program.cs" -StartLine 42
-    Creates an inline comment on line 42 of Program.cs.
+    Creates a new comment thread with explicit connection parameters.
 
 .EXAMPLE
     .\Add-AzureDevOpsPRComment.ps1 -Token "your-pat" -CollectionUri "https://dev.azure.com/myorg" -Project "myproject" -Repository "myrepo" -Id 123 -Comment "Refactor this" -FilePath "/src/Program.cs" -StartLine 42 -EndLine 50 -IterationId 3
@@ -75,37 +77,45 @@
     Author: Little Fort Software
     Date: December 2025
     Requires: PowerShell 5.1 or later
-    
+
+    Environment Variables Used (when explicit parameters are not supplied):
+    - AZUREDEVOPS_TOKEN: Authentication token (PAT or OAuth)
+    - AZUREDEVOPS_AUTH_TYPE: 'Basic' for PAT, 'Bearer' for OAuth
+    - AZUREDEVOPS_COLLECTION_URI: Azure DevOps collection URI
+    - PROJECT: Azure DevOps project name
+    - REPOSITORY: Repository name
+    - PRID: Pull request ID
+    - ITERATION_ID: (Optional) PR iteration ID for inline comments
+
     If an inline comment fails (e.g., line no longer exists in the diff), the script will
     automatically fall back to posting a generic PR comment with the file path and line
     information appended to the comment text.
+
+    Note: Parameter default values that reference environment variables ($env:*) are
+    evaluated each time the script is invoked (not at module/session load time), so they
+    correctly pick up the current environment state when called.
 #>
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, HelpMessage = "Authentication token for Azure DevOps (PAT or OAuth token)")]
-    [ValidateNotNullOrEmpty()]
-    [string]$Token,
+    [Parameter(Mandatory = $false, HelpMessage = "Authentication token for Azure DevOps (PAT or OAuth token). Defaults to AZUREDEVOPS_TOKEN env var.")]
+    [string]$Token = $env:AZUREDEVOPS_TOKEN,
 
     [Parameter(Mandatory = $false, HelpMessage = "Authentication type: 'Basic' for PAT, 'Bearer' for OAuth")]
     [ValidateSet("Basic", "Bearer")]
-    [string]$AuthType = "Basic",
+    [string]$AuthType = $(if ($env:AZUREDEVOPS_AUTH_TYPE) { $env:AZUREDEVOPS_AUTH_TYPE } else { "Basic" }),
 
-    [Parameter(Mandatory = $true, HelpMessage = "Azure DevOps collection URI (e.g., https://dev.azure.com/myorg)")]
-    [ValidateNotNullOrEmpty()]
-    [string]$CollectionUri,
+    [Parameter(Mandatory = $false, HelpMessage = "Azure DevOps collection URI. Defaults to AZUREDEVOPS_COLLECTION_URI env var.")]
+    [string]$CollectionUri = $env:AZUREDEVOPS_COLLECTION_URI,
 
-    [Parameter(Mandatory = $true, HelpMessage = "Azure DevOps project name")]
-    [ValidateNotNullOrEmpty()]
-    [string]$Project,
+    [Parameter(Mandatory = $false, HelpMessage = "Azure DevOps project name. Defaults to PROJECT env var.")]
+    [string]$Project = $env:PROJECT,
 
-    [Parameter(Mandatory = $true, HelpMessage = "Repository name")]
-    [ValidateNotNullOrEmpty()]
-    [string]$Repository,
+    [Parameter(Mandatory = $false, HelpMessage = "Repository name. Defaults to REPOSITORY env var.")]
+    [string]$Repository = $env:REPOSITORY,
 
-    [Parameter(Mandatory = $true, HelpMessage = "Pull request ID")]
-    [ValidateRange(1, [int]::MaxValue)]
-    [int]$Id,
+    [Parameter(Mandatory = $false, HelpMessage = "Pull request ID. Defaults to PRID env var.")]
+    [string]$Id = $env:PRID,
 
     [Parameter(Mandatory = $true, HelpMessage = "Comment text to post")]
     [ValidateNotNullOrEmpty()]
@@ -128,91 +138,31 @@ param(
     [int]$EndLine,
 
     [Parameter(Mandatory = $false, HelpMessage = "Pull request iteration ID for inline comments")]
-    [int]$IterationId
+    [int]$IterationId = $(if ($env:ITERATION_ID) { [int]$env:ITERATION_ID } else { 0 })
 )
 
+# Validate required connection parameters (may come from env vars or explicit args)
+$missing = @()
+if ([string]::IsNullOrEmpty($Token)) { $missing += 'Token (or AZUREDEVOPS_TOKEN env var)' }
+if ([string]::IsNullOrEmpty($CollectionUri)) { $missing += 'CollectionUri (or AZUREDEVOPS_COLLECTION_URI env var)' }
+if ([string]::IsNullOrEmpty($Project)) { $missing += 'Project (or PROJECT env var)' }
+if ([string]::IsNullOrEmpty($Repository)) { $missing += 'Repository (or REPOSITORY env var)' }
+if ([string]::IsNullOrEmpty($Id)) { $missing += 'Id (or PRID env var)' }
+if ($missing.Count -gt 0) {
+    Write-Error "Add-AzureDevOpsPRComment: Missing required parameter(s): $($missing -join ', ')"
+    exit 1
+}
+
+$IdInt = [int]$Id
+if ($IdInt -le 0) {
+    Write-Error "Add-AzureDevOpsPRComment: Pull request ID must be a positive integer. Got: $Id"
+    exit 1
+}
+
+Write-Host "Posting comment with thread status: $Status" -ForegroundColor DarkGray
+Import-Module "$PSScriptRoot/AzureDevOpsHelpers.psm1" -Force
+
 #region Helper Functions
-
-function Get-AuthorizationHeader {
-    param(
-        [string]$Token,
-        [string]$AuthType = "Basic"
-    )
-    
-    if ($AuthType -eq "Bearer") {
-        return @{
-            Authorization  = "Bearer $Token"
-            "Content-Type" = "application/json"
-        }
-    }
-    else {
-        $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$Token"))
-        return @{
-            Authorization  = "Basic $base64Auth"
-            "Content-Type" = "application/json"
-        }
-    }
-}
-
-function Invoke-AzureDevOpsApi {
-    param(
-        [string]$Uri,
-        [hashtable]$Headers,
-        [string]$Method = "Get",
-        [object]$Body = $null
-    )
-    
-    try {
-        $params = @{
-            Uri         = $Uri
-            Headers     = $Headers
-            Method      = $Method
-            ErrorAction = "Stop"
-        }
-        
-        if ($null -ne $Body) {
-            $params.Body = $Body | ConvertTo-Json -Depth 10
-        }
-        
-        $response = Invoke-RestMethod @params
-        return $response
-    }
-    catch {
-        $statusCode = $null
-        $errorDetail = $null
-
-        if ($_.Exception.Response) {
-            $statusCode = $_.Exception.Response.StatusCode.value__
-        }
-        if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            $errorDetail = $_.ErrorDetails.Message
-        }
-
-        # Build a descriptive error message with all available context
-        $baseMsg = "Azure DevOps API error"
-        if ($statusCode) {
-            $baseMsg += " (HTTP $statusCode)"
-        }
-        $baseMsg += " calling $Method $Uri"
-
-        if ($statusCode -eq 401) {
-            Write-Error "$baseMsg — Authentication failed. Please verify your token is valid and has appropriate permissions. API response: $errorDetail"
-        }
-        elseif ($statusCode -eq 404) {
-            Write-Error "$baseMsg — Resource not found. Please verify the organization, project, repository, and PR ID. API response: $errorDetail"
-        }
-        elseif ($statusCode -eq 400) {
-            Write-Error "$baseMsg — Bad request. API response: $errorDetail"
-        }
-        elseif ($statusCode) {
-            Write-Error "$baseMsg — API response: $errorDetail"
-        }
-        else {
-            Write-Error "$baseMsg — $($_.Exception.Message)"
-        }
-        return $null
-    }
-}
 
 function Get-ThreadStatusValue {
     param([string]$StatusName)

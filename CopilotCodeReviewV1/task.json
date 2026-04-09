@@ -3,7 +3,7 @@
     "id": "5fe45e88-c466-4658-ad2f-f6735e8a601f",
     "name": "CopilotCodeReview",
     "friendlyName": "Copilot Code Review",
-    "description": "Perform automated code reviews on pull requests using the GitHub Copilot CLI or Claude Code",
+    "description": "Perform automated code reviews on pull requests using the GitHub Copilot CLI",
     "helpMarkDown": "[Learn more about this task](https://github.com/little-fort/ado-copilot-code-review)",
     "category": "Utility",
     "author": "LittleFortSoftware",
@@ -16,48 +16,12 @@
     "minimumAgentVersion": "2.182.1",
     "inputs": [
         {
-            "name": "useClaudeCode",
-            "type": "boolean",
-            "label": "Use Claude Code CLI",
-            "required": false,
-            "defaultValue": false,
-            "helpMarkDown": "When enabled, uses Claude Code CLI (Anthropic) instead of GitHub Copilot CLI for the code review. Requires an Anthropic API key."
-        },
-        {
             "name": "githubPat",
             "type": "string",
             "label": "GitHub PAT",
             "required": false,
             "isSecret": true,
-            "helpMarkDown": "Personal Access Token for GitHub with Copilot access. Required when using the GitHub Copilot CLI (default). Not needed when 'Use Claude Code CLI' is enabled.",
-            "visibleRule": "useClaudeCode != true"
-        },
-        {
-            "name": "anthropicApiKey",
-            "type": "string",
-            "label": "Anthropic API Key",
-            "required": false,
-            "isSecret": true,
-            "helpMarkDown": "API key for Anthropic's Claude Code CLI. Required when 'Use Claude Code CLI' is enabled.",
-            "visibleRule": "useClaudeCode = true"
-        },
-        {
-            "name": "maxTurns",
-            "type": "string",
-            "label": "Max Turns (Claude Code)",
-            "required": false,
-            "defaultValue": "",
-            "helpMarkDown": "Optional. Maximum number of agentic turns for Claude Code CLI. Limits how many tool-use iterations the agent can perform.",
-            "visibleRule": "useClaudeCode = true"
-        },
-        {
-            "name": "maxBudget",
-            "type": "string",
-            "label": "Max Budget USD (Claude Code)",
-            "required": false,
-            "defaultValue": "",
-            "helpMarkDown": "Optional. Maximum cost in USD for the Claude Code CLI session. The session will stop if this budget is reached.",
-            "visibleRule": "useClaudeCode = true"
+            "helpMarkDown": "Personal Access Token for GitHub with Copilot access. Required for GitHub Copilot CLI authentication."
         },
         {
             "name": "azureDevOpsPat",
@@ -131,20 +95,12 @@
             "helpMarkDown": "Optional. The Copilot model to use for the review (e.g., 'gpt-4', 'claude-sonnet'). If not specified, uses the default model."
         },
         {
-            "name": "promptFile",
-            "type": "filePath",
-            "label": "Custom Prompt File",
-            "required": false,
-            "defaultValue": "",
-            "helpMarkDown": "Optional. Path to a .txt file containing a custom prompt for Copilot. The file must exist and contain content."
-        },
-        {
             "name": "prompt",
             "type": "multiLine",
             "label": "Custom Prompt",
             "required": false,
             "defaultValue": "",
-            "helpMarkDown": "Optional. A custom prompt to pass directly to Copilot. If both prompt and promptFile are specified, prompt takes precedence.",
+            "helpMarkDown": "Optional. A custom prompt or path to a prompt file. If the value is a path to an existing file, the file contents are used; otherwise the value is used as inline text. The prompt is merged with the default review template unless 'promptRaw' is enabled.",
             "properties": {
                 "rows": "10",
                 "maxLength": "5000"
@@ -152,23 +108,11 @@
         },
         {
             "name": "promptRaw",
-            "type": "multiLine",
-            "label": "Raw Prompt",
+            "type": "boolean",
+            "label": "Use Raw Prompt",
             "required": false,
-            "defaultValue": "",
-            "helpMarkDown": "Optional. A raw prompt to pass directly to the Copilot CLI with no modification. Cannot be combined with other prompt inputs (prompt, promptFile, promptFileRaw).",
-            "properties": {
-                "rows": "10",
-                "maxLength": "5000"
-            }
-        },
-        {
-            "name": "promptFileRaw",
-            "type": "filePath",
-            "label": "Raw Prompt File",
-            "required": false,
-            "defaultValue": "",
-            "helpMarkDown": "Optional. Path to a file containing a raw prompt to pass directly to the Copilot CLI with no modification. Cannot be combined with other prompt inputs (prompt, promptFile, promptRaw)."
+            "defaultValue": false,
+            "helpMarkDown": "Optional. When enabled, the 'prompt' value is passed directly to the Copilot CLI without merging with the default review template."
         },
         {
             "name": "authors",
